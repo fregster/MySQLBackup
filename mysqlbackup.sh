@@ -3,13 +3,14 @@
 # Script writen by Paul Fryer based on a script I found on the internet but I can not find out where
 # Free for anyone's use and is not covered by any licence or waranty etc be aware it may eat your computer
 # TODO:
-# 	PID files to be added
+#   Add command line options, username, password, databases, disable diffs, force running (Ignore pid locks), start delay, per database delay
 
 #set -x
 
 TIME_1=`date +%s`
 
 #Options change these as required
+#Change this only if you do not wish to use the .my.cnf file or the get opts
 DB_DEFINE_USER_DETAILS=no
 DB_USER=root
 DB_PASSWORD=password
@@ -20,6 +21,7 @@ BACKUP_LIFE="+1470"
 BACKUP_FILE_MAX="+4920"
 
 #Compression methods
+#Strongly recomend this is left as gzip due to the use of the z tools
 COMPRESS_EACH_BACKUP=true
 COMPRESS_COMMAND=gzip
 COMPRESS_EXT=".gz"
@@ -41,8 +43,24 @@ CHMOD=640
 #Use this to create a seperate directory for each database this allows for seperate folder permissions etc to be kept 
 USE_SEPERATE_DIRS=true
 
+#Misc options
+DELAY_START=1
+DELAY_BACKUPS=1
 
 ### START LOGIC ###
+
+PID=/var/run/mysqlbackup.pid
+
+# create empty lock file if none exists
+cat /dev/null >> $PID
+read lastPID < $PID
+
+# if lastPID is not null and a process with that pid exists , exit
+[ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit
+
+echo "Starting MySQL MAB with pid $PID"  >> $LOG
+# save the current pid in the lock file
+echo $$ > $PID
 
 if [ ! -d "$DIR" ]; then
     # Control will enter here if the database backup dir doesn't exist
@@ -51,8 +69,18 @@ if [ ! -d "$DIR" ]; then
 fi
 cd $DIR
 
+echo "Start delay of $DELAY_START seconds" >> $LOG
+sleep $DELAY_START
+
 echo "MySQL backups for $(date +%m-%d-%y) at $(date +%H%M) is being started" >> $LOG
-DBS="$(mysql --user=$DB_USER --password=$DB_PASSWORD -h $DB_HOST -Bse 'show databases')"
+
+MYSQL_CONNECTION_STRING=''
+if [ $DB_DEFINE_USER_DETAILS = true ]; then
+    MYSQL_CONNECTION_STRING="--user=$DB_USER --password=$DB_PASSWORD -h $DB_HOST"
+fi
+
+#Add if in here to allow a comma separated list of databases via options.
+DBS="$(mysql $MYSQL_CONNECTION_STRING -h $DB_HOST -Bse 'show databases')"
 
 for db in ${DBS[@]}
 do
@@ -60,6 +88,10 @@ do
 	#File nameing format
 	#This is in the loop so the hours and minutes is correct if the database backups are large
 	FILE_DATE=$(date +%y-%m-%d-%H%M)
+
+    #0 = not yet enabled
+    #-1 = force disabled
+    #1 = all checks passed and now enabled
 	DO_DIFF=0
 
 	db_dir=$DIR
@@ -70,6 +102,7 @@ do
 	if [ ! -d "$db_dir" ]; then
 	    # Control will enter here if the database backup dir doesn't exist
 	    echo "Creating database backup directory $db_dir" >> $LOG
+        DO_DIFF=-1
 	    mkdir $db_dir
 	fi
 
@@ -87,7 +120,7 @@ do
 		EXTRA_FLAGS="$EXTRA_FLAGS --events"
 	fi
 
-	if [ $INCREMENTAL_BACKUPS = true ]; then
+	if [ $INCREMENTAL_BACKUPS = true ]  && [ "$DO_DIFF" = "0" ]; then
 		LATEST_FULL_BACKUP=`ls -t $db_dir/*.sql.gz | cut -f1 | head -n 1`
 		DO_DIFF=`find "$LATEST_FULL_BACKUP" -mmin $INCREMENTAL_BACKUPS_MAX_FULL_LIFE | wc -l`
 	
@@ -97,11 +130,6 @@ do
 				DO_DIFF=0
 			fi
 		fi	
-	fi
-
-	MYSQL_CONNECTION_STRING=''
-	if [ $DB_DEFINE_USER_DETAILS = true ]; then
-		MYSQL_CONNECTION_STRING="--user=$DB_USER --password=$DB_PASSWORD -h $DB_HOST"
 	fi
 
 	MYSQL_BACKUP_COMMAND="mysqldump $MYSQL_CONNECTION_STRING $db --single-transaction -R $EXTRA_FLAGS"
@@ -118,6 +146,9 @@ do
 	fi
 
 	chmod $CHMOD $BACKUP_FILE
+
+    #A per database delay to allow for IO sync's before the next backup
+    sleep $DELAY_BACKUPS
 done
 
 
@@ -129,7 +160,7 @@ echo "This mysql dump ran for a total of $elapsed_time minutes." >> $LOG
 # Delete any old databases.
 for del in $(`find $DIR -name "*.sql${COMPRESS_EXT}" -mmin +2160`)
 do
-	echo This backup is more than ${BACKUP_LIFE} mins old and it is being removed: $del >> $LOG
+	echo "This backup is more than ${BACKUP_LIFE} mins old and it is being removed: $del" >> $LOG
 	rm -f $del
 	if [ $INCREMENTAL_BACKUPS = true ]; then
 		BACKUP_DIFFS=`echo ${del//$COMPRESS_EXT/}`
@@ -140,9 +171,12 @@ done
 # Check for any other sql dumps that have been left and delete after BACKUP_LIFE_MAX
 for del in $(find $DIR -name '*.sql' -mmin +4920)
 do
-	echo This backup is more than ${BACKUP_LIFE_MAX} mins old and it is being removed: $del >> $LOG
+	echo "This backup is more than ${BACKUP_LIFE_MAX} mins old and it is being removed: $del" >> $LOG
 	rm -f $del
 done
 
 echo "---------- END ----------" >> $LOG
 echo "" >>$LOG
+
+#Blank the PID file
+cat /dev/null >> $PID
