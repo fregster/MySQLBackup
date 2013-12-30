@@ -1,9 +1,15 @@
 #!/bin/bash
 
-# Script writen by Paul Fryer based on a script I found on the internet but I can not find out where
+# MySQL More Advanced Backups
+#
+# Script writen by Paul Fryer based on a script I found on the Internet but I can not find out where, although very little of the origional script is left!
+#
 # Free for anyone's use and is not covered by any licence or waranty etc be aware it may eat your computer
+#
 # TODO:
-#   Add command line options, username, password, databases, disable diffs, force running (Ignore pid locks), start delay, per database delay
+#   Add command line options, username, password, databases, disable diffs, force running (Ignore pid locks), start delay, per database delay, debug output, output directory, config file
+#   Logging functions with verbosity settings
+#   Update if's to allow for better bool checking
 
 #set -x
 
@@ -58,7 +64,7 @@ read lastPID < $PID
 # if lastPID is not null and a process with that pid exists , exit
 [ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit
 
-echo "Starting MySQL MAB with pid $PID"  >> $LOG
+echo "Starting MySQL MAB with pid $$"  >> $LOG
 # save the current pid in the lock file
 echo $$ > $PID
 
@@ -69,10 +75,10 @@ if [ ! -d "$DIR" ]; then
 fi
 cd $DIR
 
-echo "Start delay of $DELAY_START seconds" >> $LOG
+echo "A MySQL MAB with a start delay of $DELAY_START seconds has started at $(date +%H%M)" >> $LOG
 sleep $DELAY_START
 
-echo "MySQL backups for $(date +%m-%d-%y) at $(date +%H%M) is being started" >> $LOG
+echo "MySQL MAB for $(date +%m-%d-%y) at $(date +%H%M) is now running" >> $LOG
 
 MYSQL_CONNECTION_STRING=''
 if [ $DB_DEFINE_USER_DETAILS = true ]; then
@@ -147,6 +153,9 @@ do
 
 	chmod $CHMOD $BACKUP_FILE
 
+    echo "Database backup completed" >> $LOG
+    echo "" >> $LOG
+
     #A per database delay to allow for IO sync's before the next backup
     sleep $DELAY_BACKUPS
 done
@@ -155,7 +164,7 @@ done
 ## This is just a sanity log check
 TIME_2=`date +%s`
 elapsed_time=$(( ( $TIME_2 - $TIME_1 ) / 60 ))
-echo "This mysql dump ran for a total of $elapsed_time minutes." >> $LOG
+echo "This MySQL MAB ran for a total of $elapsed_time minutes." >> $LOG
 
 # Delete any old databases.
 for del in $(`find $DIR -name "*.sql${COMPRESS_EXT}" -mmin +2160`)
