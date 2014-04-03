@@ -56,7 +56,7 @@ CHMOD=640
 USE_SEPERATE_DIRS=true
 
 #Misc options
-DELAY_START=1
+DELAY_START=0
 DELAY_BACKUPS=1
 
 ### START LOGIC ###
@@ -66,7 +66,7 @@ PID=/var/run/mysqlbackup.pid
 NUMBER_OF_CPUS=`grep -c ^processor /proc/cpuinfo`
 re='^[0-9]+$'
 if ! [[ $NUMBER_OF_CPUS =~ $re ]] ; then
-    NUMBER_OF_CPUS=2
+    NUMBER_OF_CPUS=1
 fi
 
 
@@ -102,7 +102,7 @@ fi
 #Add if in here to allow a comma separated list of databases via options.
 DBS="$(mysql $MYSQL_CONNECTION_STRING -h $DB_HOST -Bse 'show databases')"
 
-
+#The main database backup function
 backup_mysql_database(){
 
 #Debug to stderror
@@ -187,7 +187,7 @@ JOBS_RUNNING=0
 ((NUMBER_OF_CPUS++))
 for db in ${DBS[@]}
 do
-    if [ ${JOBS_RUNNING} -lt ${NUMBER_OF_CPUS} ]; then
+    if [ ${JOBS_RUNNING} -le ${NUMBER_OF_CPUS} ]; then
         ((JOBS_RUNNING++))
 
         backup_mysql_database &
@@ -195,7 +195,7 @@ do
         #A per database delay to allow for IO sync's before the next backup
         sleep $DELAY_BACKUPS
     else
-	wait
+        wait
     fi
 done
 wait
