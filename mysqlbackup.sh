@@ -92,6 +92,7 @@ echo "A ${SCRIPT_NAME} with a start delay of $DELAY_START seconds has started at
 sleep $DELAY_START
 
 echo "${SCRIPT_NAME} for $(date +%m-%d-%y) at $(date +%H%M) is now running" >> $LOG
+echo "" >> $LOG
 
 MYSQL_CONNECTION_STRING=''
 if [ $DB_DEFINE_USER_DETAILS = true ]; then
@@ -110,6 +111,7 @@ backup_mysql_database(){
     #File nameing format
     #This is in the loop so the hours and minutes is correct if the database backups are large
     FILE_DATE=$(date +%y-%m-%d-%H%M)
+    BACKUP_RUN_TIME_START=`date +%s`
 
     #0 = not yet enabled
     #-1 = force disabled
@@ -160,17 +162,18 @@ fi
     if [ "$DO_DIFF" = "1" ]; then
         BACKUP_FILE=`echo ${LATEST_FULL_BACKUP//$COMPRESS_EXT/}`-$FILE_DATE.diff${COMPRESS_EXT}
 
-        echo "Running diff backup to file $BACKUP_FILE" >> $LOG
+        echo "    Running diff backup to file $BACKUP_FILE" >> $LOG
         $INCREMENTAL_DIFF_CMD <($COMPRESS_EXPAND $LATEST_FULL_BACKUP) <($MYSQL_BACKUP_COMMAND) | ${COMPRESS_COMMAND_TO_USE} > $BACKUP_FILE
     else
-        echo "Running full backup" >> $LOG
+        echo "    Running full backup of '${db}'" >> $LOG
         $MYSQL_BACKUP_COMMAND | $COMPRESS_COMMAND_TO_USE > $BACKUP_FILE
     fi
 
     chmod $CHMOD $BACKUP_FILE
 
-    echo "Database backup completed" >> $LOG
-    echo "" >> $LOG
+    BACKUP_RUN_TIME_END=`date +%s`
+    BACKUP_RUN_TIME=$(( ( $BACKUP_RUN_TIME_END - $BACKUP_RUN_TIME_START ) ))
+    echo "    Database backup of '${db}' completed in ${BACKUP_RUN_TIME} seconds" >> $LOG
 
 #Debug to stderror
 #echo "Completed backing up ${db}" 1>&2
@@ -181,11 +184,11 @@ fi
 
 ## Main process loop
 JOBS_RUNNING=0
-NUMBER_OF_CPUS+=1
+((NUMBER_OF_CPUS++))
 for db in ${DBS[@]}
 do
     if [ ${JOBS_RUNNING} -lt ${NUMBER_OF_CPUS} ]; then
-	JOBS_RUNNING+=1
+        ((JOBS_RUNNING++))
 
         backup_mysql_database &
 
