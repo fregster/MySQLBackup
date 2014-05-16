@@ -217,7 +217,7 @@ backup_mysql_database(){
 	if [ $INCREMENTAL_BACKUPS = true ]  && [ "$FORCE_EXTENDED_INSERT" = true ]; then
 		#We need to enable extended inserts to allow for decent diffing of a file
 		#For many remote backup soloutions this will speed up the remote copy off too but delay the restore time
-    	EXTRA_FLAGS="$EXTRA_FLAGS --extended-insert=FALSE"
+    	EXTRA_FLAGS="$EXTRA_FLAGS --extended-insert=FALSE --quick"
 	fi
 
     if [ $INCREMENTAL_BACKUPS = true ]  && [ "$DO_DIFF" = "0" ]; then
