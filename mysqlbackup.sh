@@ -28,6 +28,7 @@ DB_DEFINE_USER_DETAILS=no
 COMPRESS_EACH_BACKUP=true
 INCREMENTAL_BACKUPS=false
 DATE_STAMP_FILES=false
+FORCE_EXTENDED_INSERT=true
 DB_HOST=''
 
 #Storage options
@@ -38,12 +39,16 @@ CHMOD=640
 #Use this to create a seperate directory for each database this allows for seperate folder permissions etc to be kept 
 USE_SEPERATE_DIRS=true
 
-while getopts ":c:u:p:h:d:l:sitvz" o; do
+while getopts ":c:u:p:h:d:l:esitvz" o; do
     case "${o}" in
     	c)
 			echo "MySQL Config File : $OPTARG" >&2
 			MYCNF=$OPTARG
             ;;
+        e)
+        	echo "Disable extended inserts" >&2
+        	FORCE_EXTENDED_INSERT=false
+        	;;
         u)
 			echo "MySQL User : $OPTARG" >&2
 			DB_USER=$OPTARG
@@ -208,6 +213,12 @@ backup_mysql_database(){
     if [ $db == "mysql" ]; then
         EXTRA_FLAGS="$EXTRA_FLAGS --events"
     fi
+
+	if [ $INCREMENTAL_BACKUPS = true ]  && [ "$FORCE_EXTENDED_INSERT" = true ]; then
+		#We need to enable extended inserts to allow for decent diffing of a file
+		#For many remote backup soloutions this will speed up the remote copy off too but delay the restore time
+    	EXTRA_FLAGS="$EXTRA_FLAGS --extended-insert=FALSE"
+	fi
 
     if [ $INCREMENTAL_BACKUPS = true ]  && [ "$DO_DIFF" = "0" ]; then
         LATEST_FULL_BACKUP=`ls -t $db_dir/*.sql.gz | cut -f1 | head -n 1`
