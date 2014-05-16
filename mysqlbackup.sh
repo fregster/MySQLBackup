@@ -38,7 +38,7 @@ CHMOD=640
 #Use this to create a seperate directory for each database this allows for seperate folder permissions etc to be kept 
 USE_SEPERATE_DIRS=true
 
-while getopts ":c:u:p:h:z:i:d:l:v:s:t:" o; do
+while getopts ":c:u:p:h:d:l:sitvz" o; do
     case "${o}" in
     	c)
 			echo "MySQL Config File : $OPTARG" >&2
