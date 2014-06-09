@@ -20,6 +20,23 @@ TIME_1=`date +%s`
 SCRIPT_NAME='MYSQL MAB'
 SCRIPT_NAME_SHORT='mab'
 
+#Function to check if key backup programs are available
+mysqldumpAvailable() {
+    if hash mysqldump 2>/dev/null; then
+        #MySQLDump found
+	return 0
+    else
+	#MySQLDump not found
+	echo 'MySQLDump not installed backup not proceding'  >> $LOG
+	exit 1
+    fi
+}
+
+#Function to check if key services are running
+mysqlServiceRunning() {
+	return 0
+}
+
 #Defaults
 #Options change these as required with the params
 #Change this only if you do not wish to use the .my.cnf file or the get opts
@@ -46,8 +63,8 @@ while getopts ":c:u:p:h:d:l:esitvz" o; do
 			MYCNF=$OPTARG
             ;;
         e)
-        	echo "Disable extended inserts" >&2
-        	FORCE_EXTENDED_INSERT=false
+        		echo "Disable extended inserts" >&2
+	        	FORCE_EXTENDED_INSERT=false
         	;;
         u)
 			echo "MySQL User : $OPTARG" >&2
@@ -81,12 +98,12 @@ while getopts ":c:u:p:h:d:l:esitvz" o; do
 			LOG=$OPTARG
             ;;
         s)
-        	echo "Use separate director for each database backed up : $OPTARG" >&2
-        	USE_SEPERATE_DIRS=enable
+        		echo "Use separate director for each database backed up : $OPTARG" >&2
+	        	USE_SEPERATE_DIRS=enable
         	;;
         t)
-        	echo "Date and TimeStamp filenames : $OPTARG" >&2
-        	DATE_STAMP_FILES=true
+        		echo "Date and TimeStamp filenames : $OPTARG" >&2
+	        	DATE_STAMP_FILES=true
         	;;
         v)
 			echo "Verbose debugging : $OPTARG" >&2
@@ -118,8 +135,14 @@ DELAY_BACKUPS=1
 
 ### START LOGIC ###
 
+#Create the PID lock file
 PID=/var/run/mysqlbackup.pid
 
+#Basic environmental checks
+mysqldumpAvailable
+mysqlServiceRunning
+
+#Gather any required system information stats
 NUMBER_OF_CPUS=`grep -c ^processor /proc/cpuinfo`
 re='^[0-9]+$'
 if ! [[ $NUMBER_OF_CPUS =~ $re ]] ; then
